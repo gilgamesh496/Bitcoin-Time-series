@@ -1,0 +1,370 @@
+---
+title: "Code BITCOIN"
+author: "Maxime Nespoulous"
+date: "5 d?cembre 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## IMPORT DES DONNEES:
+
+
+1) Import des donn?es:
+
+```{r import des donn?es}
+
+###S?rie prix du bitcoin:
+
+library(gdata) 
+gaf <- read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSalwRO7PnCobptawWj64dBQJEZ4__xf13uTZH4ekrZnQ9kTErrNRI3zHV6tykdceCugYaLwtJiyGKO/pub?output=csv", sep=",")
+bitcoin <- read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRewZCRjQVyTKYydQIe4SGGcAnho-0AWSV3Z9p63WFKaPK-57SSCbZKnTHoYXDiMGkV6UwMCqJS-udl/pub?output=csv",sep=',')
+bitcoin$Close <- gsub('[^a-zA-Z0-9.]', '', bitcoin$Close)
+bitcoin$Close <- (as.numeric(bitcoin$Close))
+bitcoin$Date <- as.Date(bitcoin$Date)
+bitcoin <- bitcoin[-c(2148), ]
+
+
+
+###S?rie sur le nombre de recherches sur google du mot bitcoin:
+
+library(gtrendsR)
+
+# donn?es quotidiennes sur la p?riode
+BitcoinResearch = data.frame()
+dates_ranges=c("2014-09-18 2014-11-01","2014-11-01 2015-02-01","2015-02-01 2015-05-01","2015-05-01 2015-08-01", "2015-08-01 2015-11-01","2015-11-01 2016-02-01","2016-02-01 2016-05-01","2016-05-01 2016-08-01", "2016-08-01 2016-11-01","2016-11-01 2017-02-01","2017-02-01 2017-05-01","2017-05-01 2017-08-01", "2017-08-01 2017-11-01","2017-11-01 2018-02-01","2018-02-01 2018-05-01","2018-05-01 2018-08-01", "2018-08-01 2018-11-01","2018-11-01 2019-02-01","2019-02-01 2019-05-01","2019-05-01 2019-08-01", "2019-08-01 2019-11-01","2019-11-01 2020-02-01","2020-02-01 2020-05-01","2020-05-01 2020-08-01", "2020-08-01 2020-10-27")
+for (i in 1:(length(dates_ranges))) { 
+  BitcoinResearch = rbind(BitcoinResearch,(gtrends("bitcoin",time=dates_ranges[i],gprop="web")$interest_over_time))
+}
+
+# donn?es mensuelles sur la p?riode
+BitcoinResearch2 <- data.frame((gtrends("bitcoin",time="2014-09-01 2020-10-27", gprop="web")$interest_over_time))
+
+# cr?ation de la dataframe BitcoinGoogle
+BitcoinResearch <- BitcoinResearch[c("date", "hits")]
+BitcoinResearch$year_month <- format(as.Date(BitcoinResearch$date), "%Y-%m")
+BitcoinResearch2 <- BitcoinResearch2[c("date", "hits")]
+BitcoinResearch2$year_month <- format(as.Date(BitcoinResearch2$date), "%Y-%m")
+
+BitcoinGoogle <- merge(BitcoinResearch, BitcoinResearch2, by="year_month")
+BitcoinGoogle$Nb <- BitcoinGoogle$hits.x * (BitcoinGoogle$hits.y / 100)
+BitcoinGoogle <- BitcoinGoogle[c("date.x", "Nb")]
+names(BitcoinGoogle)[names(BitcoinGoogle) == "date.x"] <- "Date"
+BitcoinGoogle$Date <- as.Date(BitcoinGoogle$Date)
+
+
+# repr?sentation graphique de la s?rie BitcoinGoogle_ts
+BitcoinGoogle$Nb <- gsub('[^a-zA-Z0-9.]', '', BitcoinGoogle$Nb)
+BitcoinGoogle$Nb <- (as.numeric(BitcoinGoogle$Nb))
+
+
+
+###S?rie sur la valeur du hash rate:
+
+hr = read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRIGzKdCNqzxajUsMuzZJlFdG9odnSWLPv2rAJ9opIU8_lpHHo9o-FA7J76cKwHft_iA6fQ9wM01p9P/pub?output=csv", sep=',')
+hr$Value <- (as.numeric(hr$Value))
+hr$Date=as.Date(hr$Date)
+hr <- hr[-c(2273:4355), ]
+hr <- hr[-c(1:40), ]
+hr = hr[order(nrow(hr):1),]
+
+
+
+###S?rie sur le volume de transactions:
+
+bitcoin$Volume <- gsub('[^a-zA-Z0-9.]', '', bitcoin$Volume)
+bitcoin$Volume <- (as.numeric(bitcoin$Volume))
+```
+
+
+2) Transformation des donn?es en s?rie:
+
+```{r}
+#Regroupement de toutes les s?ries:
+
+library(dplyr)
+
+Bitcoin_data <- Reduce(function(x, y) merge(x, y, all=TRUE), list(bitcoin, BitcoinGoogle, hr))
+Bitcoin_data <- Bitcoin_data[-c(2172), ]
+Bitcoin_data <- Bitcoin_data[-c(46,139,229,322,415,508,599,692,785,878,968,1061,1154,1247,
+                                1337,1430,1523,1616,1706,1799,1892,1985,2076,2169), ]
+Bitcoin_data %>% group_by(Date) %>% filter(duplicated(Date) | n()==2)
+
+
+#Cr?ation des s?ries:
+
+bitcoin_ts <- ts(as.vector(Bitcoin_data$Close),start=c(2014,261),frequency = 365)
+lnbtc <- log(bitcoin_ts)
+
+BitcoinGoogle_ts <- ts(as.vector(Bitcoin_data$Nb),start=c(2014,261),frequency = 365)
+lngoogle <- log(BitcoinGoogle_ts)
+
+hr_ts <- ts(as.vector(Bitcoin_data$Value),start=c(2014,261),end=c(2020,301),frequency=365)
+lnhr <- log(hr_ts)
+
+volume_ts <- ts(as.vector(Bitcoin_data$Volume),start=c(2014,261),frequency = 365)
+lnvol <- log(volume_ts)
+```
+
+
+
+
+```{r plot series}
+plot.ts(ts.intersect(lnbtc, lngoogle, lnhr, lnvol),main="")
+```
+Ces graphiques nous donnent des premières informations sur l'allure des séries temporelles. Le log de Bitcoin et du volume de bitcoins semble avoir une certaine stationarité jusqu'en 2017 et entre 2017 et 2018 il semble y avoir une tendance déterministe : celle-ci arrive au moment de la bulle spéculative autour du Bitcoin, cette tendance semble donc assez logique.Puis ensuite une légère stationarité se redégage après 2018. Néanmoins la stationarité n'est absolument pas clairement visible et puis si c'était le cas, elle serait diviser en plusieurs partie. Sur le tendance globale nous pouvons clairement affirmer qu'elles ne sont pas stationnaires.
+Les recherches google en log semblent suivre une marché aléatoire donc tendance stochastique avec un "pic" toujours à la période de haute spéculation.
+Le log du hash rate, lui, semble suivre une tendance déterministe et être stationnaire autour de cette tendance.En effet celui-ci correspond à la difficulté de minage du bitcoin et théoriquement devrait baisser avec la baisse des prix du Bitcoins : les mineurs étant moins incités à miner, la difficulté de minage baisse afin de maintenir l'équilibre de blocs minés.
+
+## STATIONNARITE DES SERIES:
+
+1) Analyse des ACF/PACF:
+
+Maintenant, il faut s'assurer que les s?ries sont stationnaires. Regardons dans un premier temps les graphiques des ACF/PACF:
+
+```{r acf2_growth}
+library(astsa)
+acf2(lnbtc,20)
+acf2(diff(lnbtc),20)
+acf2(lngoogle,20)
+acf2(lnhr,20)
+acf2(lnvol,20)
+```
+
+Dans les trois cas, on remarque que les ACF diminuent tr?s lentement, on peut donc en d?duire que les s?ries ne sont pas stationnaires. De plus, on remarque qu'elles n'ont pas de tendances claires, sugg?rant alors qu'il faudra pr?ciser pour le test le param?tre "drift". On peut ?galement noter qu'il n'appara?t pas de saisonnalit? au niveau des 4 s?ries.
+
+Pour ?tre certain qu'elles ne sont pas stationnaires, on fait le test de racine unitaire avec le test de l'Augmented Dickey-Fuller.
+
+
+2) Tests de Dickey-Fuller augment? pour toutes les s?ries:
+
+Pour lnbtc, il n'y a pas d'autocorr?lations partielles significatives mis ? part la premi?re ce qui nous sugg?re de choisir pour le test lags=1.
+
+```{r Dickey-Fuller lnbtc}
+library(urca)
+library(xtable)
+library(kableExtra)
+adf.lnbtc <- ur.df(lnbtc, type = "trend", lags=1)
+res.df <- data.frame(as.vector(adf.lnbtc@teststat), adf.lnbtc@cval)
+names(res.df) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+On remarque que la statistique de test "tau2" est sup?rieure aux valeurs critiques, signifiant qu'on ne peut pas rejetter l'hypoth?se nulle stipulant qu'il y a une racine unitaire. Cela implique alors que la s?rie n'est pas stationnaire. Elle est donc I(1).
+
+Pour lngoogle, il y a des d'autocorr?lations partielles significatives jusqu'? la sixi?me ce qui nous sugg?re de prendre pour le test lags=6:
+
+```{r Dickey-Fuller lngoogle}
+adf.lngoogle <- ur.df(lngoogle, type = "drift", lags=6)
+res.df2 <- data.frame(as.vector(adf.lngoogle@teststat), adf.lngoogle@cval)
+names(res.df2) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df2) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+On remarque que la statistique de test est sup?rieure aux valeurs critiques (sauf pour 10% m?me si les deux valeurs sont extr?mement proches), signifiant qu'on ne peut pas rejetter l'hypoth?se nulle stipulant qu'il y a une racine unitaire. Cela implique alors que la s?rie n'est pas stationnaire. Elle est donc I(1).
+
+Pour lnhr, il y a une autocorr?lation partielle significative pour les quatre premiers retards, ce qui nous sugg?re de prendre pour le test lags=4:
+
+```{r Dickey-Fuller lnhr}
+adf.lnhr <- ur.df(lnhr, type = "trend", lags=4)
+res.df3 <- data.frame(as.vector(adf.lnhr@teststat), adf.lnhr@cval)
+names(res.df3) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df3) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+On remarque que la statistique de test est sup?rieure aux valeurs critiques, signifiant qu'on ne peut pas rejetter l'hypoth?se nulle stipulant qu'il y a une racine unitaire. Cela implique alors que la s?rie n'est pas stationnaire. Elle est donc I(1).
+
+Pour lnvol, il y a une autocorr?lation partielle significative pour les quatre premiers retards, ce qui nous sugg?re de prendre pour le test lags=7:
+
+```{r Dickey-Fuller lnvol}
+adf.lnvol <- ur.df(lnvol, type = "trend", lags=7)
+res.df4 <- data.frame(as.vector(adf.lnvol@teststat), adf.lnvol@cval)
+names(res.df4) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df4) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+On remarque que la statistique de test est sup?rieure aux valeurs critiques, signifiant qu'on ne peut pas rejetter l'hypoth?se nulle stipulant qu'il y a une racine unitaire. Cela implique alors que la s?rie n'est pas stationnaire. Elle est donc I(1).
+
+Nous avons donc prouv? que nos s?ries sont non-stationnaires, et plus particuli?rement int?gr?es d'ordre 1.
+
+
+## IMPLEMENTATION D'UN MODELE VECM:
+
+1) V?rification que nos s?ries suivent un VAR(p) non-stationnaire:
+
+Etant donn? que toutes nos s?ries sont I(1), elles ne pourront pas ?tre repr?sent?es par un Var(p) stationnaire, mais uniquement par un Var(p) qui ne l'est pas. Il faudra donc dans un premier temps faire une r?gression avec toutes les s?ries puis observer le comportement des r?sidus pour voir s'ils sont stationnaires ou non.
+
+```{r procedure_engle_granger}
+eq1 <- lm(lnbtc ~ lngoogle + lnhr + lnvol)
+xtable(eq1) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+Comme nous pouvons le voir, nous constatons que tous les coefficients sont significatifs, ce qui peut aussi bien laisser penser ? une relation de coint?gration ou ? une r?gression fallacieuse. Dans le but de pouvoir faire la diff?rence entre les deux situations, il va falloir observer le comportement des r?sidus et voir s'ils sont stationnaires ou pas. 
+
+```{r plot residuals}
+library(astsa)
+u <- residuals(eq1)
+plot(ts(u))
+```
+
+On constate une importante fluctuation des valeurs autour d'une moyenne qui semble ?tre aux environs de 0. Regardons la repr?sentation des ACF/PACF:
+
+```{r acf u}
+aux <- acf2(u)
+```
+
+Il semble ? l'aide des ACF/PACF que les r?sidus ne soient pas stationnaires car on voit des autocorr?lations partielles significatives. Faisons un test de Dickey-Fuller pour en ?tre s?r:
+
+```{r adf_residuals}
+adf.u <- ur.df(u, type = "drift", selectlags="BIC", lags=7)
+res.df5 <- data.frame(as.vector(adf.u@teststat), adf.u@cval) 
+names(res.df5) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df5) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+Cependant, il faut utiliser les valeurs critiques suivantes pour pouvoir conclure sur la stationnarit? ou pas des r?sidus:
+
+```{r, echo=FALSE}
+l <- 2:5
+cv1percent <- c(-3.9,-4.29,-4.64,-4.96)
+cv5percent <- c(-3.34,-3.74,-4.1,-4.42)
+cv10percent <- c(-3.04,-3.45,-3.81,-4.13)
+englegranger <- 
+  data.frame(l, cv1percent, cv5percent, cv10percent)
+xtable(englegranger) %>%
+  kable(digits=2) %>%
+  kable_styling()
+```
+
+On remarque que la statistique de test de "tau2" est plus petite que toutes les valeurs critiques (ici, nous devons regarder la ligne pour l=4 car il s'agit du nombre de s?ries que nous avons dans notre mod?le). On peut donc en conclure qu'il n'y a pas de racine unitaire et cela implique alors que les r?sidus sont stationnaires. Pour notre mod?le, cela signifie que nous sommes en pr?sence d'au moins une relation de coint?gration. 
+
+Il s'agit maintenant de d?terminer le nombre exact de relations de coint?gration ? l'aide du test de Johansen. La proc?dure du test de Johansen consiste ? faire un test du rapport de vraisemblance sur l'ensemble de la matrice repr?sentant chaque s?rie. Cependant, avant d'appliquer la m?thode, nous devons savoir quel mod?le VAR est susceptible de correspondre le mieux ? nos s?ries. Pour cela, utilisons les diff?rents crit?res afin de nous guider dans notre choix:
+
+```{r}
+library(vars)
+var_bitcoin <- ts.intersect(lnbtc,lngoogle,lnhr,lnvol)
+VARselect(var_bitcoin)$selection
+```
+
+Nous savons que le crit?re du BIC (crit?re de Schwarz SC) est celui qui p?nalise le plus le nombre de param?tres afin d'obtenir un mod?le plus parcimonieux. Nous choisissons donc une valeur de 5 pour le nombre de retards du VAR. 
+Appliquons maintenant le test de Johansen:
+
+```{r johansen}
+library(urca)
+coint_bitcoin <- ca.jo(var_bitcoin, type="eigen", K=5)
+summary(coint_bitcoin)
+```
+
+Avec cette proc?dure, nous pouvons alors d?cider du nombre de relation de coint?gration. 
+Regardons pour commencer par l'hypoth?se nulle H0 r=0. On voit que la statistique de test est largement sup?rieure ? la valeur critique ? 1% (58,62>32,14). Cela signifie qu'on peut rejeter l'hypoth?se nulle stipulant qu'il n'y a aucune relation de coint?gration.  
+Continuons avec l'hypoth?se nulle H0 r<=1. On constate ? nouveau que la statistique de test est plus grande que la valeur critique ? 1% (40.76>25,75), impliquant qu'on peut rejeter l'hypoth?se pr?cisant qu'il n'y a qu'une seule relation de coint?gration. 
+En s'attardant ? la troisi?me hypoth?se nulle H0 r<=2, on remarque cette fois-ci que la statistique de test est plus petite que toutes les valeurs critiques, en particulier celle ? 1%, signifiant alors que nous ne pouvons pas rejeter l'hypoth?se nulle. Nous pouvons donc en conclure qu'il y a 2 relations de coint?gration. 
+
+Maintenant que nous avons toutes les informations n?cessaires, nous pouvons alors faire un mod?le VECM avec 2 relations de coint?gration et un retard de 5:
+
+```{r vecm_bitcoin}
+vecm_bitcoin <- cajorls(coint_bitcoin, r = 2)
+summary(vecm_bitcoin[["rlm"]])
+```
+
+Dans notre cas, ?tant donn? que nous souhaitons savoir si le volume des transactions, le nombre de recherches du mot bitcoin sur Google ou encore le Hash rate peuvent avoir un impact ? la fois sur le court terme comme sur le long terme, il est alors important de regarder la premi?re ?quation ainsi que les r?sultats qui suivent. On peut alors constater que seulement 4 coefficients sont significatifs (? 5%): les deux coefficients des vitesses d'ajustement ainsi que lnvol retard?e respectivement de 3 et de 4 retards. 
+
+Dans le court terme, on note uniquement des valeurs significatives pour "lnvol.dl3" et "lnvol.dl4". On peut alors constater qu'aucune des variables dont le prix du bitcoin (lnbtc), le nombre de recherche sur Google (lngoogle) et la valeur du hash rate (lnhr) n'a des coefficients significatifs pour n'importe quel retard. Cela signifie donc que les valeurs pass?es de toutes ces variables n'ont pas d'impact sur le prix du Bitcoin ? la date t. Cependant, pour le volume des transactions, bien qu'on puisse faire le m?me constat que pr?c?demment pour un retard de 1 et de 2, on voit que pour les autres retards celle-ci a des coefficients significatifs. On peut donc en conclure que des chocs sur le volume de transactions il y a trois ou quatre journ?es seront susceptibles d'avoir un l?ger impact sur le prix du Bitcoin ? la date t. 
+
+Dans le long terme, pour ce qui est des vitesses d'ajustement ("ect1" et "ect2"), les valeurs des estimations sont respectivement ?gales ? -0,0057652 et 0,0051368, la somme faisant -0,0006284. Cela signifie donc que 0,06284% des effets d'un choc exog?ne seront absorb?s sur la prochaine p?riode (ici la journ?e suivante), ce qui est extr?mement faible. On peut aussi interpr?ter ce chiffre de la fa?on suivante: 99,93716% des effets d'un choc exog?ne perdurent au cours de la prochaine journ?e, ce qui est une valeur particuli?rement importante. Au niveau de l'interpr?tation ?conomique, on peut en d?duire que le prix est susceptible de varier de mani?re importante d'une journ?e ? l'autre si un choc exog?ne significatif a eu lieu. Cela semble relativement logique puisqu'on sait que le prix du Bitcoin d'une journ?e ? l'autre est tr?s volatile.
+
+
+### Etude du Greed and Fear index
+Nous avions vu dans la littérature que le prix Bitcoin était corrélé avec le sentiment global des réseaux sociaux avec le nombre de mention le concernant. Néanmoins, après étude de la relation de long terme via un VECM sur le prix du Bitcoin et le nombre de recherche Google, nous avions vu que finalement le prix du bitcoin ne s'adaptait au nombre de recherche. Quand est-il avec un index plus "fort" et précis comme le greed and fear index ? Celui-ci est construit avec les recherches google mais pas que. Ainsi nous allons étudier sa relation de long terme avec le prix du Bitcoin.
+
+Pour cela nous allons réitérer beaucoup d'étapes que nous avions préalablement faites sur lesquelles nous allons moins nous attardés pour leurs interprétations.
+
+```{r vecm_bitcoin}
+
+gaf <- read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSalwRO7PnCobptawWj64dBQJEZ4__xf13uTZH4ekrZnQ9kTErrNRI3zHV6tykdceCugYaLwtJiyGKO/pub?output=csv", sep=",")
+gaf$Date <- as.Date(gaf$Date, format = "%d-%m-%Y")
+
+bitcoin_ts2 <- ts(as.vector(Bitcoin_data$Close),start=c(2018,31),end=c(2020,301),frequency = 365)
+lnbtc2 <- log(bitcoin_ts2)
+df_lnbtc <- data.frame(lnbtc2)
+
+gaf_ts <- ts(as.vector(gaf$G.FI),start=c(2018,31),end=c(2020,301),frequency = 365)
+lngaf <- log(gaf_ts)
+df_lngaf <- data.frame(lngaf)
+
+```
+
+Cette fois nous reprenons la série du prix du bitcoin et nous adaptons la temporalité à celle du Greed and Fear index afin qu'elle concorde avec celui-ci. Ainsi les deux série commencent le 1er février 2018 et finissent le 27 octobre 2020.
+
+```{r plot series}
+plot.ts(ts.intersect(lnbtc2,lngaf),main="")
+```
+
+Sur le graphique de la série temporelle du log du Greed and Fear index on peut voir que la série semble plutôt stationnaire, chose que nous allons vérifier par un test de Dickey-Fuller.
+
+```{r Dickey-Fuller lnbtc}
+aux <- acf2(lnbtc2,20)
+aux <- acf2(lngaf,20)
+```
+
+```{r Dickey-Fuller lnbtc}
+adf.lnbtc2 <- ur.df(lnbtc2, type = "trend", lags=4)
+res.df11 <- data.frame(as.vector(adf.lnbtc2@teststat), adf.lnbtc2@cval)
+names(res.df11) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df11) %>%
+  kable(digits=2) %>%
+  kable_styling()
+
+adf.lngaf <- ur.df(lngaf, type = "trend", lags=4)
+res.df5 <- data.frame(as.vector(adf.lngaf@teststat), adf.lngaf@cval)
+names(res.df5) <- c("Stat","CV 1pct", "CV 5pct", "CV 10pct")
+xtable(res.df5) %>%
+  kable(digits=2) %>%
+  kable_styling()
+
+```
+
+Comme prévu le prix en log du bitcoin n'est pas stationnaire sur la portion de temps 2018-2020.
+Par contre le greed and fear index l'est.
+
+```{r Dickey-Fuller lnbtc}
+dlnbtc <- diff(lnbtc2)
+dlngaf <- diff(lngaf)
+aux <- acf2(dlnbtc,20)
+aux <- acf2(dlngaf,20)
+
+dataframe2 <- cbind(dlnbtc,dlngaf)
+VARselect(dataframe2, lag.max = 8, type = "const")$selection
+
+```
+
+Après différencation pour stationnariser le prix en log du Bitcoin, nous allons utiliser les critères d'informations pour choisir le nombre de lag introduis dans notre modèle VAR.
+Pour le choix du VAR, les critères BIC (SC) et HQ, qui choisissent des modèles plus parcimonieux, suggèrent d’utiliser un VAR(2), alors que les deux autres suggèrent un VAR(7).
+
+```{r Dickey-Fuller lnbtc}
+Var2 <- VAR(dataframe2, p = 2, type = "const")
+
+# Résultats
+summary(Var2)
+```
+
+On peut voir que le coefficient associé à la croissance du Greed and Fear index n'est pas significatif peu importe le nombre de lag choisi.
+Finalement cela confirme notre résultat du VECM concernant le nombre de recherche Google. Même un index plus consistant et complexe concernant le sentiment global sur internet à propos du Bitcoin ne permet pas d'expliquer les variations de prix de celui-ci.
+
+Nous allons donc nous arrêter là, pas besoin de tester notre modèle Var plus en profondeur ni de vérifier la causalité au sens de Granger étant donné la non-significativé du coefficient. 
+
+Conclusion : 
