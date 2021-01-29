@@ -1,6 +1,6 @@
 ---
 title: "Code BITCOIN"
-author: "Maxime Nespoulous"
+author: "Thomas Clément"
 date: "5 d?cembre 2020"
 output: html_document
 ---
